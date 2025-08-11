@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Police vs. Thieves (Hide & Seek)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #1a202c;
+            color: #e2e8f0;
+            overflow: hidden;
+        }
+        .game-container {
+            border: 4px solid #4a5568;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        canvas {
+            background-color: #2d3748;
+        }
+        .btn {
+            background-color: #4a5568;
+            border: 2px solid #718096;
+            transition: all 0.2s ease-in-out;
+        }
+        .btn:hover {
+            background-color: #718096;
+            transform: translateY(-2px);
+        }
+        .modal {
+            background-color: rgba(26, 32, 44, 0.9);
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+
+    <div id="game-ui" class="w-full max-w-6xl mx-auto p-4 text-center">
+        <h1 class="text-4xl mb-2">Hide From The Police</h1>
+        <div class="flex flex-col md:flex-row justify-between items-center mb-4 text-lg">
+             <div>Level: <span id="levelDisplay" class="text-yellow-400">1</span></div>
+             <div id="gameStatus" class="text-2xl font-bold text-green-400 my-2 md:my-0">Collect all the gold!</div>
+             <div>Controls: <span class="text-yellow-400">Arrows / WASD</span></div>
+        </div>
+        
+        <div class="game-container w-full aspect-video mx-auto rounded-lg overflow-hidden">
+            <canvas id="gameCanvas"></canvas>
+        </div>
+
+        <div class="mt-4">
+            <button id="startGameBtn" class="btn px-8 py-3 rounded-lg text-xl">Start Game</button>
+        </div>
+        
+        <div id="win-message-modal" class="modal fixed inset-0 z-50 hidden items-center justify-center">
+            <div class="bg-[#2d3748] p-8 rounded-lg shadow-2xl text-center">
+                <h2 id="win-message-text" class="text-4xl mb-4"></h2>
+                <button id="play-again-btn" class="btn p-3 rounded-lg">Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Game Config ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const TILE_SIZE = 32;
+        let MAP_COLS, MAP_ROWS;
+        
+        const POLICE_EMOJI = '�';
+        const PLAYER_EMOJI = '🏃';
+        const GOLD_EMOJI = '💰';
+        const WALL_COLOR = '#4a5568';
+        const PATH_COLOR = '#2d3748';
+
+        // A more open map layout to prevent items from being trapped
+        const mapLayout = [
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        ];
+
+        MAP_ROWS = mapLayout.length;
+        MAP_COLS = mapLayout[0].length;
+
+        let gameState = {};
+        let policeMoveInterval;
+        let lastFrameTime = 0;
+        const POLICE_MOVE_SPEED = 500; // ms
+
+        // --- Game Setup ---
+        function findEmptySpot() {
+            let x, y;
+            do {
+                x = Math.floor(Math.random() * MAP_COLS);
+                y = Math.floor(Math.random() * MAP_ROWS);
+            } while (mapLayout[y][x] === 1);
+            return { x, y };
+        }
+
+        function generateGold() {
+            const goldPieces = [];
+            const numGold = 10;
+            for (let i = 0; i < numGold; i++) {
+                goldPieces.push(findEmptySpot());
+            }
+            return goldPieces;
+        }
+        
+        function createPolice(level) {
+            const police = [];
+            for(let i = 0; i < level; i++) {
+                police.push({ id: `police-${i}`, ...findEmptySpot() });
+            }
+            return police;
+        }
+
+        function initializeGame() {
+            gameState = {
+                player: { ...findEmptySpot() },
+                police: createPolice(1),
+                gold: generateGold(),
+                map: mapLayout,
+                level: 1,
+                gameStatus: 'waiting', // waiting, in-progress, game-over
+            };
+            document.getElementById('win-message-modal').classList.add('hidden');
+            document.getElementById('gameStatus').textContent = 'Press Start Game!';
+            document.getElementById('gameStatus').className = 'text-2xl font-bold text-yellow-400';
+            document.getElementById('levelDisplay').textContent = gameState.level;
+            document.getElementById('startGameBtn').disabled = false;
+            document.getElementById('startGameBtn').classList.remove('hidden');
+        }
+        
+        function startNextLevel() {
+            gameState.level++;
+            gameState.player = { ...findEmptySpot() };
+            gameState.police = createPolice(gameState.level);
+            gameState.gold = generateGold();
+            document.getElementById('levelDisplay').textContent = gameState.level;
+            document.getElementById('gameStatus').textContent = 'Game On!';
+        }
+
+        // --- UI Updates ---
+        function updateUI() {
+            const { gameStatus } = gameState;
+            const statusEl = document.getElementById('gameStatus');
+            
+            if (gameStatus === 'in-progress') {
+                statusEl.textContent = 'Game On!';
+                statusEl.className = 'text-2xl font-bold text-green-400';
+            } else if (gameStatus === 'game-over') {
+                showGameOverMessage();
+            }
+        }
+        
+        function showGameOverMessage() {
+            clearInterval(policeMoveInterval);
+            const winModal = document.getElementById('win-message-modal');
+            const winText = document.getElementById('win-message-text');
+            winText.textContent = `🚨 Game Over! 🚨 You reached level ${gameState.level}.`;
+            winText.className = 'text-4xl mb-4 text-red-500';
+            winModal.classList.remove('hidden');
+            winModal.classList.add('flex');
+        }
+
+        // --- Canvas Drawing ---
+        function drawGame() {
+            const { player, police, gold, map } = gameState;
+            
+            const container = document.querySelector('.game-container');
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+            
+            canvas.width = MAP_COLS * TILE_SIZE;
+            canvas.height = MAP_ROWS * TILE_SIZE;
+
+            const scale = Math.min(containerWidth / canvas.width, containerHeight / canvas.height);
+            canvas.style.width = `${canvas.width * scale}px`;
+            canvas.style.height = `${canvas.height * scale}px`;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            for (let y = 0; y < MAP_ROWS; y++) {
+                for (let x = 0; x < MAP_COLS; x++) {
+                    ctx.fillStyle = map[y][x] === 1 ? WALL_COLOR : PATH_COLOR;
+                    ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                }
+            }
+
+            ctx.font = `${TILE_SIZE * 0.8}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            gold.forEach(g => {
+                ctx.fillText(GOLD_EMOJI, g.x * TILE_SIZE + TILE_SIZE / 2, g.y * TILE_SIZE + TILE_SIZE / 2);
+            });
+
+            police.forEach(p => {
+                ctx.fillText(POLICE_EMOJI, p.x * TILE_SIZE + TILE_SIZE / 2, p.y * TILE_SIZE + TILE_SIZE / 2);
+            });
+            
+            ctx.fillText(PLAYER_EMOJI, player.x * TILE_SIZE + TILE_SIZE / 2, player.y * TILE_SIZE + TILE_SIZE / 2);
+        }
+
+        // --- Player & Police Movement ---
+        function handleKeyPress(e) {
+            if (gameState.gameStatus !== 'in-progress') return;
+
+            let { x, y } = gameState.player;
+            const key = e.key.toLowerCase();
+            
+            if (['arrowup', 'w'].includes(key)) y--;
+            else if (['arrowdown', 's'].includes(key)) y++;
+            else if (['arrowleft', 'a'].includes(key)) x--;
+            else if (['arrowright', 'd'].includes(key)) x++;
+            else return;
+
+            e.preventDefault();
+
+            if (y < 0 || y >= MAP_ROWS || x < 0 || x >= MAP_COLS || gameState.map[y][x] === 1) {
+                return; // Invalid move
+            }
+            
+            gameState.player.x = x;
+            gameState.player.y = y;
+
+            handlePlayerInteractions();
+            checkCapture();
+            checkLevelEnd();
+            updateUI();
+        }
+
+        function movePolice() {
+            if (gameState.gameStatus !== 'in-progress') return;
+            
+            gameState.police.forEach(p => {
+                const moves = [
+                    { x: p.x, y: p.y - 1 }, // Up
+                    { x: p.x, y: p.y + 1 }, // Down
+                    { x: p.x - 1, y: p.y }, // Left
+                    { x: p.x + 1, y: p.y }  // Right
+                ];
+
+                const validMoves = moves.filter(move => 
+                    move.y >= 0 && move.y < MAP_ROWS &&
+                    move.x >= 0 && move.x < MAP_COLS &&
+                    gameState.map[move.y][move.x] === 0
+                );
+
+                if (validMoves.length > 0) {
+                    const nextMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+                    p.x = nextMove.x;
+                    p.y = nextMove.y;
+                }
+            });
+
+            checkCapture();
+            updateUI();
+        }
+
+        function handlePlayerInteractions() {
+            const { player, gold } = gameState;
+            const goldIndex = gold.findIndex(g => g.x === player.x && g.y === player.y);
+            if (goldIndex > -1) {
+                gold.splice(goldIndex, 1);
+            }
+        }
+
+        function checkCapture() {
+            const { player, police } = gameState;
+            const captured = police.some(p => p.x === player.x && p.y === player.y);
+            if (captured) {
+                gameState.gameStatus = 'game-over';
+            }
+        }
+
+        function checkLevelEnd() {
+            if (gameState.gold.length === 0) {
+                startNextLevel();
+            }
+        }
+
+        function startGame() {
+            if (gameState.gameStatus !== 'in-progress') {
+                gameState.gameStatus = 'in-progress';
+                document.getElementById('startGameBtn').classList.add('hidden');
+                policeMoveInterval = setInterval(movePolice, POLICE_MOVE_SPEED);
+                updateUI();
+            }
+        }
+        
+        function gameLoop(timestamp) {
+            drawGame();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- Event Listeners ---
+        document.getElementById('startGameBtn').addEventListener('click', startGame);
+        document.getElementById('play-again-btn').addEventListener('click', initializeGame);
+        window.addEventListener('keydown', handleKeyPress);
+        window.addEventListener('resize', drawGame);
+
+        // --- Start the app ---
+        initializeGame();
+        gameLoop();
+
+    </script>
+</body>
+</html>
