@@ -11,13 +11,12 @@
             font-family: 'Press Start 2P', cursive;
             background-color: #1a202c;
             color: #e2e8f0;
+            /* Prevent scrollbars from appearing */
             overflow: hidden;
         }
         .game-container {
             border: 4px solid #4a5568;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
-        }
-        canvas {
             background-color: #2d3748;
         }
         .btn {
@@ -34,24 +33,32 @@
         }
     </style>
 </head>
-<body class="flex items-center justify-center min-h-screen">
+<body class="h-screen">
 
-    <div id="game-ui" class="w-full max-w-6xl mx-auto p-4 text-center">
-        <h1 class="text-4xl mb-2">Hide From The Police</h1>
-        <div class="flex flex-col md:flex-row justify-between items-center mb-4 text-lg">
-             <div>Level: <span id="levelDisplay" class="text-yellow-400">1</span></div>
-             <div id="gameStatus" class="text-2xl font-bold text-green-400 my-2 md:my-0">Collect all the gold!</div>
-             <div>Controls: <span class="text-yellow-400">Arrows / WASD</span></div>
+    <!-- Main UI container uses flexbox to manage layout -->
+    <div id="game-ui" class="w-full h-full max-w-7xl mx-auto p-4 flex flex-col text-center">
+        
+        <!-- Header Section: Title and Status -->
+        <div class="flex-shrink-0">
+            <h1 class="text-3xl md:text-4xl mb-2">Hide From The Police</h1>
+            <div class="flex flex-col md:flex-row justify-between items-center mb-4 text-base md:text-lg">
+                 <div>Level: <span id="levelDisplay" class="text-yellow-400">1</span></div>
+                 <div id="gameStatus" class="text-xl md:text-2xl font-bold text-green-400 my-2 md:my-0">Collect all the gold!</div>
+                 <div>Controls: <span class="text-yellow-400">Arrows / WASD</span></div>
+            </div>
         </div>
         
-        <div class="game-container w-full aspect-video mx-auto rounded-lg overflow-hidden">
+        <!-- Game Canvas Container: This part grows to fill available space -->
+        <div class="game-container flex-grow w-full flex items-center justify-center rounded-lg overflow-hidden">
             <canvas id="gameCanvas"></canvas>
         </div>
 
-        <div class="mt-4">
+        <!-- Footer Section: Start Button -->
+        <div class="flex-shrink-0 mt-4">
             <button id="startGameBtn" class="btn px-8 py-3 rounded-lg text-xl">Start Game</button>
         </div>
         
+        <!-- Modal for Game Over message -->
         <div id="win-message-modal" class="modal fixed inset-0 z-50 hidden items-center justify-center">
             <div class="bg-[#2d3748] p-8 rounded-lg shadow-2xl text-center">
                 <h2 id="win-message-text" class="text-4xl mb-4"></h2>
@@ -68,13 +75,12 @@
         const TILE_SIZE = 32;
         let MAP_COLS, MAP_ROWS;
         
-        const POLICE_EMOJI = '�';
+        const POLICE_EMOJI = '👮';
         const PLAYER_EMOJI = '🏃';
         const GOLD_EMOJI = '💰';
         const WALL_COLOR = '#4a5568';
         const PATH_COLOR = '#2d3748';
 
-        // A more open map layout to prevent items from being trapped
         const mapLayout = [
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
             [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
@@ -98,7 +104,6 @@
 
         let gameState = {};
         let policeMoveInterval;
-        let lastFrameTime = 0;
         const POLICE_MOVE_SPEED = 500; // ms
 
         // --- Game Setup ---
@@ -129,6 +134,7 @@
         }
 
         function initializeGame() {
+            if (policeMoveInterval) clearInterval(policeMoveInterval);
             gameState = {
                 player: { ...findEmptySpot() },
                 police: createPolice(1),
@@ -139,7 +145,7 @@
             };
             document.getElementById('win-message-modal').classList.add('hidden');
             document.getElementById('gameStatus').textContent = 'Press Start Game!';
-            document.getElementById('gameStatus').className = 'text-2xl font-bold text-yellow-400';
+            document.getElementById('gameStatus').className = 'text-xl md:text-2xl font-bold text-yellow-400 my-2 md:my-0';
             document.getElementById('levelDisplay').textContent = gameState.level;
             document.getElementById('startGameBtn').disabled = false;
             document.getElementById('startGameBtn').classList.remove('hidden');
@@ -161,7 +167,7 @@
             
             if (gameStatus === 'in-progress') {
                 statusEl.textContent = 'Game On!';
-                statusEl.className = 'text-2xl font-bold text-green-400';
+                statusEl.className = 'text-xl md:text-2xl font-bold text-green-400 my-2 md:my-0';
             } else if (gameStatus === 'game-over') {
                 showGameOverMessage();
             }
@@ -172,7 +178,7 @@
             const winModal = document.getElementById('win-message-modal');
             const winText = document.getElementById('win-message-text');
             winText.textContent = `🚨 Game Over! 🚨 You reached level ${gameState.level}.`;
-            winText.className = 'text-4xl mb-4 text-red-500';
+            winText.className = 'text-2xl md:text-4xl mb-4 text-red-500';
             winModal.classList.remove('hidden');
             winModal.classList.add('flex');
         }
@@ -185,22 +191,29 @@
             const containerWidth = container.clientWidth;
             const containerHeight = container.clientHeight;
             
+            // Set internal canvas resolution
             canvas.width = MAP_COLS * TILE_SIZE;
             canvas.height = MAP_ROWS * TILE_SIZE;
 
+            // Calculate the best scale to fit the container while maintaining aspect ratio
             const scale = Math.min(containerWidth / canvas.width, containerHeight / canvas.height);
+            
+            // Apply the scale to the canvas element's display size
             canvas.style.width = `${canvas.width * scale}px`;
             canvas.style.height = `${canvas.height * scale}px`;
 
+            // Clear previous frame
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
+            // Draw map
             for (let y = 0; y < MAP_ROWS; y++) {
                 for (let x = 0; x < MAP_COLS; x++) {
                     ctx.fillStyle = map[y][x] === 1 ? WALL_COLOR : PATH_COLOR;
                     ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
                 }
             }
-
+            
+            // Draw game elements
             ctx.font = `${TILE_SIZE * 0.8}px sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -231,7 +244,7 @@
             e.preventDefault();
 
             if (y < 0 || y >= MAP_ROWS || x < 0 || x >= MAP_COLS || gameState.map[y][x] === 1) {
-                return; // Invalid move
+                return;
             }
             
             gameState.player.x = x;
@@ -248,10 +261,8 @@
             
             gameState.police.forEach(p => {
                 const moves = [
-                    { x: p.x, y: p.y - 1 }, // Up
-                    { x: p.x, y: p.y + 1 }, // Down
-                    { x: p.x - 1, y: p.y }, // Left
-                    { x: p.x + 1, y: p.y }  // Right
+                    { x: p.x, y: p.y - 1 }, { x: p.x, y: p.y + 1 },
+                    { x: p.x - 1, y: p.y }, { x: p.x + 1, y: p.y }
                 ];
 
                 const validMoves = moves.filter(move => 
@@ -302,7 +313,7 @@
             }
         }
         
-        function gameLoop(timestamp) {
+        function gameLoop() {
             drawGame();
             requestAnimationFrame(gameLoop);
         }
@@ -311,6 +322,7 @@
         document.getElementById('startGameBtn').addEventListener('click', startGame);
         document.getElementById('play-again-btn').addEventListener('click', initializeGame);
         window.addEventListener('keydown', handleKeyPress);
+        // Redraw canvas on window resize to ensure it always fits
         window.addEventListener('resize', drawGame);
 
         // --- Start the app ---
