@@ -11,7 +11,6 @@
             font-family: 'Press Start 2P', cursive;
             background-color: #1a202c;
             color: #e2e8f0;
-            /* Prevent scrollbars from appearing */
             overflow: hidden;
         }
         .game-container {
@@ -35,10 +34,11 @@
 </head>
 <body class="h-screen">
 
-    <!-- Main UI container uses flexbox to manage layout -->
+    <!-- Audio element for the police siren -->
+    <audio id="siren-sound" src="police.mp3" loop></audio>
+
     <div id="game-ui" class="w-full h-full max-w-7xl mx-auto p-4 flex flex-col text-center">
         
-        <!-- Header Section: Title and Status -->
         <div class="flex-shrink-0">
             <h1 class="text-3xl md:text-4xl mb-2">Hide From The Police</h1>
             <div class="flex flex-col md:flex-row justify-between items-center mb-4 text-base md:text-lg">
@@ -48,17 +48,14 @@
             </div>
         </div>
         
-        <!-- Game Canvas Container: This part grows to fill available space -->
         <div class="game-container flex-grow w-full flex items-center justify-center rounded-lg overflow-hidden">
             <canvas id="gameCanvas"></canvas>
         </div>
 
-        <!-- Footer Section: Start Button -->
         <div class="flex-shrink-0 mt-4">
             <button id="startGameBtn" class="btn px-8 py-3 rounded-lg text-xl">Start Game</button>
         </div>
         
-        <!-- Modal for Game Over message -->
         <div id="win-message-modal" class="modal fixed inset-0 z-50 hidden items-center justify-center">
             <div class="bg-[#2d3748] p-8 rounded-lg shadow-2xl text-center">
                 <h2 id="win-message-text" class="text-4xl mb-4"></h2>
@@ -68,9 +65,9 @@
     </div>
 
     <script>
-        // --- Game Config ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const sirenSound = document.getElementById('siren-sound');
 
         const TILE_SIZE = 32;
         let MAP_COLS, MAP_ROWS;
@@ -104,9 +101,8 @@
 
         let gameState = {};
         let policeMoveInterval;
-        const POLICE_MOVE_SPEED = 500; // ms
+        const POLICE_MOVE_SPEED = 500;
 
-        // --- Game Setup ---
         function findEmptySpot() {
             let x, y;
             do {
@@ -135,13 +131,18 @@
 
         function initializeGame() {
             if (policeMoveInterval) clearInterval(policeMoveInterval);
+            
+            // Stop and reset the siren sound
+            sirenSound.pause();
+            sirenSound.currentTime = 0;
+
             gameState = {
                 player: { ...findEmptySpot() },
                 police: createPolice(1),
                 gold: generateGold(),
                 map: mapLayout,
                 level: 1,
-                gameStatus: 'waiting', // waiting, in-progress, game-over
+                gameStatus: 'waiting',
             };
             document.getElementById('win-message-modal').classList.add('hidden');
             document.getElementById('gameStatus').textContent = 'Press Start Game!';
@@ -160,7 +161,6 @@
             document.getElementById('gameStatus').textContent = 'Game On!';
         }
 
-        // --- UI Updates ---
         function updateUI() {
             const { gameStatus } = gameState;
             const statusEl = document.getElementById('gameStatus');
@@ -175,6 +175,10 @@
         
         function showGameOverMessage() {
             clearInterval(policeMoveInterval);
+            // Stop the siren when the game is over
+            sirenSound.pause();
+            sirenSound.currentTime = 0;
+
             const winModal = document.getElementById('win-message-modal');
             const winText = document.getElementById('win-message-text');
             winText.textContent = `🚨 Game Over! 🚨 You reached level ${gameState.level}.`;
@@ -183,7 +187,6 @@
             winModal.classList.add('flex');
         }
 
-        // --- Canvas Drawing ---
         function drawGame() {
             const { player, police, gold, map } = gameState;
             
@@ -191,21 +194,16 @@
             const containerWidth = container.clientWidth;
             const containerHeight = container.clientHeight;
             
-            // Set internal canvas resolution
             canvas.width = MAP_COLS * TILE_SIZE;
             canvas.height = MAP_ROWS * TILE_SIZE;
 
-            // Calculate the best scale to fit the container while maintaining aspect ratio
             const scale = Math.min(containerWidth / canvas.width, containerHeight / canvas.height);
             
-            // Apply the scale to the canvas element's display size
             canvas.style.width = `${canvas.width * scale}px`;
             canvas.style.height = `${canvas.height * scale}px`;
 
-            // Clear previous frame
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Draw map
             for (let y = 0; y < MAP_ROWS; y++) {
                 for (let x = 0; x < MAP_COLS; x++) {
                     ctx.fillStyle = map[y][x] === 1 ? WALL_COLOR : PATH_COLOR;
@@ -213,7 +211,6 @@
                 }
             }
             
-            // Draw game elements
             ctx.font = `${TILE_SIZE * 0.8}px sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -228,7 +225,6 @@
             ctx.fillText(PLAYER_EMOJI, player.x * TILE_SIZE + TILE_SIZE / 2, player.y * TILE_SIZE + TILE_SIZE / 2);
         }
 
-        // --- Player & Police Movement ---
         function handleKeyPress(e) {
             if (gameState.gameStatus !== 'in-progress') return;
 
@@ -308,6 +304,10 @@
             if (gameState.gameStatus !== 'in-progress') {
                 gameState.gameStatus = 'in-progress';
                 document.getElementById('startGameBtn').classList.add('hidden');
+                
+                // Start the siren sound. Browsers require user interaction to play audio.
+                sirenSound.play();
+
                 policeMoveInterval = setInterval(movePolice, POLICE_MOVE_SPEED);
                 updateUI();
             }
@@ -318,14 +318,11 @@
             requestAnimationFrame(gameLoop);
         }
 
-        // --- Event Listeners ---
         document.getElementById('startGameBtn').addEventListener('click', startGame);
         document.getElementById('play-again-btn').addEventListener('click', initializeGame);
         window.addEventListener('keydown', handleKeyPress);
-        // Redraw canvas on window resize to ensure it always fits
         window.addEventListener('resize', drawGame);
 
-        // --- Start the app ---
         initializeGame();
         gameLoop();
 

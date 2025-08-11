@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Police vs. Thieves (Local)</title>
+    <title>Police vs. Thieves (Hide & Seek)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
@@ -16,8 +16,6 @@
         .game-container {
             border: 4px solid #4a5568;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
-        }
-        canvas {
             background-color: #2d3748;
         }
         .btn {
@@ -34,21 +32,27 @@
         }
     </style>
 </head>
-<body class="flex items-center justify-center min-h-screen">
+<body class="h-screen">
 
-    <div id="game-ui" class="w-full max-w-6xl mx-auto p-4 text-center">
-        <h1 class="text-4xl mb-2">Police vs. Thieves</h1>
-        <div class="flex flex-col md:flex-row justify-between items-center mb-4 text-lg">
-             <div>Police Controls: <span class="text-yellow-400">Arrow Keys</span></div>
-             <div id="gameStatus" class="text-2xl font-bold text-green-400 my-2 md:my-0">Press Start Game!</div>
-             <div>Thief Controls: <span class="text-yellow-400">W, A, S, D</span></div>
+    <!-- Audio element for the police siren -->
+    <audio id="siren-sound" src="police.mp3" loop></audio>
+
+    <div id="game-ui" class="w-full h-full max-w-7xl mx-auto p-4 flex flex-col text-center">
+        
+        <div class="flex-shrink-0">
+            <h1 class="text-3xl md:text-4xl mb-2">Hide From The Police</h1>
+            <div class="flex flex-col md:flex-row justify-between items-center mb-4 text-base md:text-lg">
+                 <div>Level: <span id="levelDisplay" class="text-yellow-400">1</span></div>
+                 <div id="gameStatus" class="text-xl md:text-2xl font-bold text-green-400 my-2 md:my-0">Collect all the gold!</div>
+                 <div>Controls: <span class="text-yellow-400">Arrows / WASD</span></div>
+            </div>
         </div>
         
-        <div class="game-container w-full aspect-video mx-auto rounded-lg overflow-hidden">
+        <div class="game-container flex-grow w-full flex items-center justify-center rounded-lg overflow-hidden">
             <canvas id="gameCanvas"></canvas>
         </div>
 
-        <div class="mt-4">
+        <div class="flex-shrink-0 mt-4">
             <button id="startGameBtn" class="btn px-8 py-3 rounded-lg text-xl">Start Game</button>
         </div>
         
@@ -61,45 +65,44 @@
     </div>
 
     <script>
-        // --- Game Config ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const sirenSound = document.getElementById('siren-sound');
 
         const TILE_SIZE = 32;
         let MAP_COLS, MAP_ROWS;
         
         const POLICE_EMOJI = '👮';
-        const THIEF_EMOJI = '🏃';
-        const CAUGHT_THIEF_EMOJI = '⛓️';
+        const PLAYER_EMOJI = '🏃';
         const GOLD_EMOJI = '💰';
         const WALL_COLOR = '#4a5568';
         const PATH_COLOR = '#2d3748';
 
         const mapLayout = [
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
             [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-            [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
-            [1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1],
-            [1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1],
-            [1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1],
-            [1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1],
-            [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
-            [1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 1],
-            [1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1],
-            [1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         ];
 
         MAP_ROWS = mapLayout.length;
         MAP_COLS = mapLayout[0].length;
 
-        // --- Local Game State ---
         let gameState = {};
+        let policeMoveInterval;
+        const POLICE_MOVE_SPEED = 500;
 
-        // --- Game Setup ---
         function findEmptySpot() {
             let x, y;
             do {
@@ -117,65 +120,75 @@
             }
             return goldPieces;
         }
-
-        function createPlayer(id, role, controls) {
-            return {
-                id,
-                role,
-                ...findEmptySpot(),
-                isCaught: false,
-                controls
-            };
+        
+        function createPolice(level) {
+            const police = [];
+            for(let i = 0; i < level; i++) {
+                police.push({ id: `police-${i}`, ...findEmptySpot() });
+            }
+            return police;
         }
 
         function initializeGame() {
+            if (policeMoveInterval) clearInterval(policeMoveInterval);
+            
+            // Stop and reset the siren sound
+            sirenSound.pause();
+            sirenSound.currentTime = 0;
+
             gameState = {
-                players: {
-                    'p1': createPlayer('p1', 'police', { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' }),
-                    'p2': createPlayer('p2', 'thief', { up: 'w', down: 's', left: 'a', right: 'd' })
-                },
+                player: { ...findEmptySpot() },
+                police: createPolice(1),
                 gold: generateGold(),
                 map: mapLayout,
-                gameStatus: 'waiting', // waiting, in-progress, police-win, thieves-win
+                level: 1,
+                gameStatus: 'waiting',
             };
             document.getElementById('win-message-modal').classList.add('hidden');
             document.getElementById('gameStatus').textContent = 'Press Start Game!';
-            document.getElementById('gameStatus').className = 'text-2xl font-bold text-yellow-400';
+            document.getElementById('gameStatus').className = 'text-xl md:text-2xl font-bold text-yellow-400 my-2 md:my-0';
+            document.getElementById('levelDisplay').textContent = gameState.level;
             document.getElementById('startGameBtn').disabled = false;
+            document.getElementById('startGameBtn').classList.remove('hidden');
+        }
+        
+        function startNextLevel() {
+            gameState.level++;
+            gameState.player = { ...findEmptySpot() };
+            gameState.police = createPolice(gameState.level);
+            gameState.gold = generateGold();
+            document.getElementById('levelDisplay').textContent = gameState.level;
+            document.getElementById('gameStatus').textContent = 'Game On!';
         }
 
-
-        // --- UI Updates ---
         function updateUI() {
             const { gameStatus } = gameState;
             const statusEl = document.getElementById('gameStatus');
             
             if (gameStatus === 'in-progress') {
                 statusEl.textContent = 'Game On!';
-                statusEl.className = 'text-2xl font-bold text-green-400';
-            } else if (gameStatus === 'police-win' || gameStatus === 'thieves-win') {
-                showWinMessage(gameStatus);
+                statusEl.className = 'text-xl md:text-2xl font-bold text-green-400 my-2 md:my-0';
+            } else if (gameStatus === 'game-over') {
+                showGameOverMessage();
             }
         }
         
-        function showWinMessage(gameStatus) {
+        function showGameOverMessage() {
+            clearInterval(policeMoveInterval);
+            // Stop the siren when the game is over
+            sirenSound.pause();
+            sirenSound.currentTime = 0;
+
             const winModal = document.getElementById('win-message-modal');
             const winText = document.getElementById('win-message-text');
-            if (gameStatus === 'police-win') {
-                winText.textContent = '👮 Police Win! 👮';
-                winText.className = 'text-4xl mb-4 text-blue-500';
-            } else if (gameStatus === 'thieves-win') {
-                winText.textContent = '🏃 Thieves Win! 🏃';
-                winText.className = 'text-4xl mb-4 text-green-500';
-            }
+            winText.textContent = `🚨 Game Over! 🚨 You reached level ${gameState.level}.`;
+            winText.className = 'text-2xl md:text-4xl mb-4 text-red-500';
             winModal.classList.remove('hidden');
             winModal.classList.add('flex');
         }
 
-
-        // --- Canvas Drawing ---
         function drawGame() {
-            const { players, gold, map } = gameState;
+            const { player, police, gold, map } = gameState;
             
             const container = document.querySelector('.game-container');
             const containerWidth = container.clientWidth;
@@ -185,6 +198,7 @@
             canvas.height = MAP_ROWS * TILE_SIZE;
 
             const scale = Math.min(containerWidth / canvas.width, containerHeight / canvas.height);
+            
             canvas.style.width = `${canvas.width * scale}px`;
             canvas.style.height = `${canvas.height * scale}px`;
 
@@ -196,7 +210,7 @@
                     ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
                 }
             }
-
+            
             ctx.font = `${TILE_SIZE * 0.8}px sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -204,108 +218,111 @@
                 ctx.fillText(GOLD_EMOJI, g.x * TILE_SIZE + TILE_SIZE / 2, g.y * TILE_SIZE + TILE_SIZE / 2);
             });
 
-            Object.values(players).forEach(p => {
-                let emoji = '';
-                if (p.role === 'police') {
-                    emoji = POLICE_EMOJI;
-                } else {
-                    emoji = p.isCaught ? CAUGHT_THIEF_EMOJI : THIEF_EMOJI;
-                }
-                ctx.fillText(emoji, p.x * TILE_SIZE + TILE_SIZE / 2, p.y * TILE_SIZE + TILE_SIZE / 2);
+            police.forEach(p => {
+                ctx.fillText(POLICE_EMOJI, p.x * TILE_SIZE + TILE_SIZE / 2, p.y * TILE_SIZE + TILE_SIZE / 2);
             });
+            
+            ctx.fillText(PLAYER_EMOJI, player.x * TILE_SIZE + TILE_SIZE / 2, player.y * TILE_SIZE + TILE_SIZE / 2);
         }
 
-        // --- Player Movement and Game Logic ---
         function handleKeyPress(e) {
             if (gameState.gameStatus !== 'in-progress') return;
 
-            const playerToMove = Object.values(gameState.players).find(p => Object.values(p.controls).includes(e.key.toLowerCase()));
-
-            if (!playerToMove || (playerToMove.role === 'thief' && playerToMove.isCaught)) {
-                return;
-            }
-
-            let { x, y } = playerToMove;
-            const { controls } = playerToMove;
+            let { x, y } = gameState.player;
             const key = e.key.toLowerCase();
             
-            if (key === controls.up) y--;
-            else if (key === controls.down) y++;
-            else if (key === controls.left) x--;
-            else if (key === controls.right) x++;
+            if (['arrowup', 'w'].includes(key)) y--;
+            else if (['arrowdown', 's'].includes(key)) y++;
+            else if (['arrowleft', 'a'].includes(key)) x--;
+            else if (['arrowright', 'd'].includes(key)) x++;
             else return;
 
             e.preventDefault();
 
             if (y < 0 || y >= MAP_ROWS || x < 0 || x >= MAP_COLS || gameState.map[y][x] === 1) {
-                return; // Invalid move
+                return;
             }
             
-            playerToMove.x = x;
-            playerToMove.y = y;
+            gameState.player.x = x;
+            gameState.player.y = y;
 
-            handleInteractions(playerToMove);
-            checkWinConditions();
+            handlePlayerInteractions();
+            checkCapture();
+            checkLevelEnd();
             updateUI();
         }
 
-        function handleInteractions(movedPlayer) {
-            const { players, gold } = gameState;
+        function movePolice() {
+            if (gameState.gameStatus !== 'in-progress') return;
+            
+            gameState.police.forEach(p => {
+                const moves = [
+                    { x: p.x, y: p.y - 1 }, { x: p.x, y: p.y + 1 },
+                    { x: p.x - 1, y: p.y }, { x: p.x + 1, y: p.y }
+                ];
 
-            // Thief collects gold
-            if (movedPlayer.role === 'thief') {
-                const goldIndex = gold.findIndex(g => g.x === movedPlayer.x && g.y === movedPlayer.y);
-                if (goldIndex > -1) {
-                    gold.splice(goldIndex, 1);
+                const validMoves = moves.filter(move => 
+                    move.y >= 0 && move.y < MAP_ROWS &&
+                    move.x >= 0 && move.x < MAP_COLS &&
+                    gameState.map[move.y][move.x] === 0
+                );
+
+                if (validMoves.length > 0) {
+                    const nextMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+                    p.x = nextMove.x;
+                    p.y = nextMove.y;
                 }
-            }
+            });
 
-            // Police catches thief
-            if (movedPlayer.role === 'police') {
-                Object.values(players).forEach(otherPlayer => {
-                    if (otherPlayer.role === 'thief' && !otherPlayer.isCaught && otherPlayer.x === movedPlayer.x && otherPlayer.y === movedPlayer.y) {
-                        otherPlayer.isCaught = true;
-                    }
-                });
+            checkCapture();
+            updateUI();
+        }
+
+        function handlePlayerInteractions() {
+            const { player, gold } = gameState;
+            const goldIndex = gold.findIndex(g => g.x === player.x && g.y === player.y);
+            if (goldIndex > -1) {
+                gold.splice(goldIndex, 1);
             }
         }
 
-        function checkWinConditions() {
-            // Thieves win
-            if (gameState.gold.length === 0) {
-                gameState.gameStatus = 'thieves-win';
-                return;
+        function checkCapture() {
+            const { player, police } = gameState;
+            const captured = police.some(p => p.x === player.x && p.y === player.y);
+            if (captured) {
+                gameState.gameStatus = 'game-over';
             }
+        }
 
-            // Police win
-            const thieves = Object.values(gameState.players).filter(p => p.role === 'thief');
-            const allCaught = thieves.every(t => t.isCaught);
-            if (thieves.length > 0 && allCaught) {
-                gameState.gameStatus = 'police-win';
+        function checkLevelEnd() {
+            if (gameState.gold.length === 0) {
+                startNextLevel();
             }
         }
 
         function startGame() {
             if (gameState.gameStatus !== 'in-progress') {
                 gameState.gameStatus = 'in-progress';
-                document.getElementById('startGameBtn').disabled = true;
+                document.getElementById('startGameBtn').classList.add('hidden');
+                
+                // Start the siren sound. Browsers require user interaction to play audio.
+                sirenSound.play();
+
+                policeMoveInterval = setInterval(movePolice, POLICE_MOVE_SPEED);
                 updateUI();
             }
         }
         
-        // --- Game Loop ---
         function gameLoop() {
             drawGame();
             requestAnimationFrame(gameLoop);
         }
 
-        // --- Event Listeners ---
         document.getElementById('startGameBtn').addEventListener('click', startGame);
         document.getElementById('play-again-btn').addEventListener('click', initializeGame);
         window.addEventListener('keydown', handleKeyPress);
         window.addEventListener('resize', drawGame);
 
-        // --- Start the app ---
         initializeGame();
         gameLoop();
 
